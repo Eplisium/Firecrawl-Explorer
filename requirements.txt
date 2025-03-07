@@ -1,0 +1,5 @@
+requests>=2.31.0
+rich>=13.7.0
+textual>=0.52.1
+asyncio>=3.4.3
+python-dotenv>=1.0.0 
