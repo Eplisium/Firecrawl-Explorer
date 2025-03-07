@@ -242,6 +242,12 @@ class FirecrawlClient:
         Returns:
             The full path to the saved file.
         """
+        # Handle relative paths and ensure directory exists
+        if not os.path.isabs(directory):
+            # If not an absolute path, make it relative to the script's directory
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            directory = os.path.join(script_dir, directory)
+        
         # Create directory if it doesn't exist
         os.makedirs(directory, exist_ok=True)
         
@@ -279,7 +285,8 @@ class FirecrawlExplorer:
         self.api_key = ""
         self.client = FirecrawlClient(self.api_url, self.api_key if self.api_key else None)
         self.running = True
-        self.default_save_dir = os.path.join(os.path.expanduser("~"), "firecrawl_data")
+        # Set default save directory to the script's directory
+        self.default_save_dir = os.path.dirname(os.path.abspath(__file__))
     
     def display_header(self):
         """Display the application header."""
@@ -348,78 +355,65 @@ This application allows you to interact with your local Firecrawl instance and e
         # Ask for main content only
         only_main_content = Confirm.ask("Extract only main content?", default=True)
         
-        # Execute scrape
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=self.console
-        ) as progress:
-            task = progress.add_task("[cyan]Scraping URL...", total=1)
-            
-            try:
-                params = {
-                    "formats": [format_value],
-                    "onlyMainContent": only_main_content
-                }
-                result = self.client.scrape_url(url, params)
-                progress.update(task, completed=1)
-                
-                if format_value == "markdown":
-                    content = result.get("markdown", "No markdown content returned")
-                    self.console.print(Panel(Markdown(content), title=f"Scrape Results for {url}", box=box.ROUNDED))
-                elif format_value == "html":
-                    content = result.get("html", "No HTML content returned")
-                    self.console.print(Panel(Syntax(content, "html", theme="monokai", line_numbers=True), title=f"Scrape Results for {url}", box=box.ROUNDED))
-                elif format_value == "json":
-                    content = json.dumps(result.get("json", {}), indent=2)
-                    self.console.print(Panel(Syntax(content, "json", theme="monokai", line_numbers=True), title=f"Scrape Results for {url}", box=box.ROUNDED))
-                else:
-                    content = result.get("text", "No text content returned")
-                    self.console.print(Panel(content, title=f"Scrape Results for {url}", box=box.ROUNDED))
-                
-                # Display metadata
-                if "metadata" in result:
-                    metadata_table = Table(title="Metadata", box=box.ROUNDED)
-                    metadata_table.add_column("Property", style="cyan")
-                    metadata_table.add_column("Value", style="green")
-                    
-                    for key, value in result["metadata"].items():
-                        if value is not None:
-                            metadata_table.add_row(key, str(value))
-                    
-                    self.console.print(metadata_table)
-                
-                # Ask if user wants to save the results
-                if Confirm.ask("Do you want to save these results to a file?", default=True):
-                    # Ask for directory
-                    save_dir = Prompt.ask("Enter directory to save file", default=self.default_save_dir)
-                    
-                    # Generate default filename based on URL and timestamp
-                    domain = url.replace("https://", "").replace("http://", "").split("/")[0]
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    default_filename = f"{domain}_{timestamp}"
-                    
-                    # Ask for filename
-                    filename = Prompt.ask("Enter filename", default=default_filename)
-                    
-                    # Save the content
-                    if format_value == "json":
-                        save_data = result.get("json", {})
-                    else:
-                        save_data = content
-                    
-                    try:
-                        saved_path = self.client.save_to_file(save_data, save_dir, filename, format_value)
-                        self.console.print(f"[bold green]Results saved to:[/bold green] {saved_path}")
-                    except Exception as e:
-                        self.console.print(f"[bold red]Error saving file:[/bold red] {str(e)}")
-            
-            except Exception as e:
-                progress.update(task, completed=1)
-                self.console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        # Execute scrape with a single progress display
+        self.console.print("[cyan]Scraping URL...[/cyan]")
         
-        self.console.print("\nPress Enter to continue...")
-        input()
+        try:
+            params = {
+                "formats": [format_value],
+                "onlyMainContent": only_main_content
+            }
+            result = self.client.scrape_url(url, params)
+            
+            if format_value == "markdown":
+                content = result.get("markdown", "No markdown content returned")
+                self.console.print(Panel(Markdown(content), title=f"Scrape Results for {url}", box=box.ROUNDED))
+            elif format_value == "html":
+                content = result.get("html", "No HTML content returned")
+                self.console.print(Panel(Syntax(content, "html", theme="monokai", line_numbers=True), title=f"Scrape Results for {url}", box=box.ROUNDED))
+            elif format_value == "json":
+                content = json.dumps(result.get("json", {}), indent=2)
+                self.console.print(Panel(Syntax(content, "json", theme="monokai", line_numbers=True), title=f"Scrape Results for {url}", box=box.ROUNDED))
+            else:
+                content = result.get("text", "No text content returned")
+                self.console.print(Panel(content, title=f"Scrape Results for {url}", box=box.ROUNDED))
+            
+            # Display metadata
+            if "metadata" in result:
+                metadata_table = Table(title="Metadata", box=box.ROUNDED)
+                metadata_table.add_column("Property", style="cyan")
+                metadata_table.add_column("Value", style="green")
+                
+                for key, value in result["metadata"].items():
+                    if value is not None:
+                        metadata_table.add_row(key, str(value))
+                
+                self.console.print(metadata_table)
+            
+            # Ask if user wants to save the results
+            if Confirm.ask("Do you want to save these results to a file?", default=True):
+                # Prepare the data to save based on format
+                if format_value == "json":
+                    save_data = result.get("json", {})
+                elif format_value == "markdown":
+                    save_data = result.get("markdown", "")
+                elif format_value == "html":
+                    save_data = result.get("html", "")
+                else:
+                    save_data = result.get("text", "")
+                
+                # Use the helper method to handle the save dialog
+                self._handle_save_dialog(save_data, url, "", format_value)
+        
+        except Exception as e:
+            self.console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        
+        # Improved user prompt
+        self.console.print("\n[bold cyan]Press Enter to return to the main menu...[/bold cyan]")
+        try:
+            input()
+        except EOFError:
+            pass  # Handle potential EOFError when running in certain environments
     
     def crawl_url(self):
         """Handle the crawl URL functionality."""
@@ -431,84 +425,67 @@ This application allows you to interact with your local Firecrawl instance and e
         depth = Prompt.ask("Maximum depth", default="2")
         limit = Prompt.ask("Maximum pages to crawl", default="100")
         
-        # Execute crawl
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=self.console
-        ) as progress:
-            task = progress.add_task("[cyan]Initiating crawl...", total=1)
-            
-            try:
-                params = {
-                    "maxDepth": int(depth),
-                    "limit": int(limit),
-                    "scrapeOptions": {
-                        "formats": ["markdown"],
-                        "onlyMainContent": True
-                    }
-                }
-                
-                if exclude_paths:
-                    params["excludePaths"] = [path.strip() for path in exclude_paths.split(",")]
-                
-                if include_paths:
-                    params["includePaths"] = [path.strip() for path in include_paths.split(",")]
-                
-                crawl_response = self.client.crawl_url(url, params)
-                crawl_id = crawl_response.get("id")
-                progress.update(task, completed=1)
-                
-                if not crawl_id:
-                    self.console.print("[bold red]Error:[/bold red] No crawl ID returned")
-                    return
-                
-                self.console.print(f"Crawl initiated with ID: {crawl_id}")
-                
-                # Wait for crawl completion
-                final_status = self.client.wait_for_crawl_completion(crawl_id)
-                
-                # Create a table to display the results
-                table = Table(title=f"Crawl Results for {url}", box=box.ROUNDED)
-                table.add_column("URL", style="cyan")
-                table.add_column("Status", style="green")
-                table.add_column("Content Length", style="yellow")
-                
-                data = final_status.get("data", [])
-                for item in data:
-                    page_url = item.get("metadata", {}).get("sourceURL", "Unknown")
-                    status = "Success"
-                    content_length = len(item.get("markdown", "")) if "markdown" in item else 0
-                    table.add_row(page_url, status, str(content_length))
-                
-                self.console.print(table)
-                
-                # Ask if user wants to save the results
-                if Confirm.ask("Do you want to save the crawl results to a file?", default=True):
-                    # Ask for directory
-                    save_dir = Prompt.ask("Enter directory to save file", default=self.default_save_dir)
-                    
-                    # Generate default filename based on URL and timestamp
-                    domain = url.replace("https://", "").replace("http://", "").split("/")[0]
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    default_filename = f"crawl_{domain}_{timestamp}"
-                    
-                    # Ask for filename
-                    filename = Prompt.ask("Enter filename", default=default_filename)
-                    
-                    # Save the content
-                    try:
-                        saved_path = self.client.save_to_file(final_status, save_dir, filename, "json")
-                        self.console.print(f"[bold green]Results saved to:[/bold green] {saved_path}")
-                    except Exception as e:
-                        self.console.print(f"[bold red]Error saving file:[/bold red] {str(e)}")
-            
-            except Exception as e:
-                progress.update(task, completed=1)
-                self.console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        # Execute crawl with a single progress display
+        self.console.print("[cyan]Initiating crawl...[/cyan]")
         
-        self.console.print("\nPress Enter to continue...")
-        input()
+        try:
+            params = {
+                "maxDepth": int(depth),
+                "limit": int(limit),
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": True
+                }
+            }
+            
+            if exclude_paths:
+                params["excludePaths"] = [path.strip() for path in exclude_paths.split(",")]
+            
+            if include_paths:
+                params["includePaths"] = [path.strip() for path in include_paths.split(",")]
+            
+            crawl_response = self.client.crawl_url(url, params)
+            crawl_id = crawl_response.get("id")
+            
+            if not crawl_id:
+                self.console.print("[bold red]Error:[/bold red] No crawl ID returned")
+                return
+            
+            self.console.print(f"[cyan]Crawl initiated with ID: {crawl_id}[/cyan]")
+            self.console.print("[cyan]Waiting for crawl to complete...[/cyan]")
+            
+            # Wait for crawl completion
+            final_status = self.client.wait_for_crawl_completion(crawl_id)
+            
+            # Create a table to display the results
+            table = Table(title=f"Crawl Results for {url}", box=box.ROUNDED)
+            table.add_column("URL", style="cyan")
+            table.add_column("Status", style="green")
+            table.add_column("Content Length", style="yellow")
+            
+            data = final_status.get("data", [])
+            for item in data:
+                page_url = item.get("metadata", {}).get("sourceURL", "Unknown")
+                status = "Success"
+                content_length = len(item.get("markdown", "")) if "markdown" in item else 0
+                table.add_row(page_url, status, str(content_length))
+            
+            self.console.print(table)
+            
+            # Ask if user wants to save the results
+            if Confirm.ask("Do you want to save the crawl results to a file?", default=True):
+                # Use the helper method to handle the save dialog
+                self._handle_save_dialog(final_status, url, "crawl_", "json")
+        
+        except Exception as e:
+            self.console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        
+        # Improved user prompt
+        self.console.print("\n[bold cyan]Press Enter to return to the main menu...[/bold cyan]")
+        try:
+            input()
+        except EOFError:
+            pass  # Handle potential EOFError when running in certain environments
     
     def map_url(self):
         """Handle the map URL functionality."""
@@ -519,65 +496,48 @@ This application allows you to interact with your local Firecrawl instance and e
         include_subdomains = Confirm.ask("Include subdomains?", default=False)
         limit = Prompt.ask("Maximum links to return", default="100")
         
-        # Execute map
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=self.console
-        ) as progress:
-            task = progress.add_task("[cyan]Mapping URL...", total=1)
-            
-            try:
-                params = {
-                    "includeSubdomains": include_subdomains,
-                    "limit": int(limit)
-                }
-                
-                if search_term:
-                    params["search"] = search_term
-                
-                result = self.client.map_url(url, params)
-                progress.update(task, completed=1)
-                
-                # Create a table to display the results
-                table = Table(title=f"Map Results for {url}", box=box.ROUNDED)
-                table.add_column("URL", style="cyan")
-                
-                links = result.get("links", [])
-                for link in links:
-                    table.add_row(link)
-                
-                self.console.print(table)
-                self.console.print(f"[bold green]Total links found:[/bold green] {len(links)}")
-                
-                # Ask if user wants to save the results
-                if Confirm.ask("Do you want to save the map results to a file?", default=True):
-                    # Ask for directory
-                    save_dir = Prompt.ask("Enter directory to save file", default=self.default_save_dir)
-                    
-                    # Generate default filename based on URL and timestamp
-                    domain = url.replace("https://", "").replace("http://", "").split("/")[0]
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    default_filename = f"map_{domain}_{timestamp}"
-                    
-                    # Ask for filename
-                    filename = Prompt.ask("Enter filename", default=default_filename)
-                    
-                    # Save the content
-                    try:
-                        # Format links as a list for better readability
-                        links_data = {"url": url, "links": links, "total": len(links)}
-                        saved_path = self.client.save_to_file(links_data, save_dir, filename, "json")
-                        self.console.print(f"[bold green]Results saved to:[/bold green] {saved_path}")
-                    except Exception as e:
-                        self.console.print(f"[bold red]Error saving file:[/bold red] {str(e)}")
-            
-            except Exception as e:
-                progress.update(task, completed=1)
-                self.console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        # Execute map with a single progress display
+        self.console.print("[cyan]Mapping URL...[/cyan]")
         
-        self.console.print("\nPress Enter to continue...")
-        input()
+        try:
+            params = {
+                "includeSubdomains": include_subdomains,
+                "limit": int(limit)
+            }
+            
+            if search_term:
+                params["search"] = search_term
+            
+            result = self.client.map_url(url, params)
+            
+            # Create a table to display the results
+            table = Table(title=f"Map Results for {url}", box=box.ROUNDED)
+            table.add_column("URL", style="cyan")
+            
+            links = result.get("links", [])
+            for link in links:
+                table.add_row(link)
+            
+            self.console.print(table)
+            self.console.print(f"[bold green]Total links found:[/bold green] {len(links)}")
+            
+            # Ask if user wants to save the results
+            if Confirm.ask("Do you want to save the map results to a file?", default=True):
+                # Format links as a list for better readability
+                links_data = {"url": url, "links": links, "total": len(links)}
+                
+                # Use the helper method to handle the save dialog
+                self._handle_save_dialog(links_data, url, "map_", "json")
+        
+        except Exception as e:
+            self.console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        
+        # Improved user prompt
+        self.console.print("\n[bold cyan]Press Enter to return to the main menu...[/bold cyan]")
+        try:
+            input()
+        except EOFError:
+            pass  # Handle potential EOFError when running in certain environments
     
     def settings(self):
         """Handle the settings functionality."""
@@ -609,8 +569,12 @@ This application allows you to interact with your local Firecrawl instance and e
             except Exception as e:
                 self.console.print(f"[bold red]Error creating save directory:[/bold red] {str(e)}")
         
-        self.console.print("\nPress Enter to continue...")
-        input()
+        # Improved user prompt
+        self.console.print("\n[bold cyan]Press Enter to return to the main menu...[/bold cyan]")
+        try:
+            input()
+        except EOFError:
+            pass  # Handle potential EOFError when running in certain environments
     
     def help(self):
         """Display help information."""
@@ -632,8 +596,61 @@ You are currently using a self-hosted instance of Firecrawl. This means that all
         
         self.console.print(Panel(Markdown(help_text), title="Help", box=box.ROUNDED))
         
-        self.console.print("\nPress Enter to continue...")
-        input()
+        # Improved user prompt
+        self.console.print("\n[bold cyan]Press Enter to return to the main menu...[/bold cyan]")
+        try:
+            input()
+        except EOFError:
+            pass  # Handle potential EOFError when running in certain environments
+    
+    def _handle_save_dialog(self, data, url, prefix="", format_type="json"):
+        """
+        Handle the save dialog consistently across all functions.
+        
+        Args:
+            data: The data to save.
+            url: The URL that was processed.
+            prefix: A prefix for the filename (e.g., "crawl_", "map_").
+            format_type: The format to save the data in.
+            
+        Returns:
+            bool: Whether the save was successful.
+        """
+        # Display save options in a panel
+        self.console.print(Panel("[bold]Save Options[/bold]", box=box.ROUNDED))
+        
+        # Ask for directory
+        save_dir_options = [
+            "1. Current directory (where the script is located)",
+            "2. Custom directory"
+        ]
+        
+        for option in save_dir_options:
+            self.console.print(f"  {option}")
+        
+        dir_choice = Prompt.ask("Choose save location", choices=["1", "2"], default="1")
+        
+        if dir_choice == "1":
+            save_dir = self.default_save_dir
+        else:
+            save_dir = Prompt.ask("Enter directory path", default=self.default_save_dir)
+        
+        # Generate default filename based on URL and timestamp
+        domain = url.replace("https://", "").replace("http://", "").split("/")[0]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"{prefix}{domain}_{timestamp}"
+        
+        # Ask for filename
+        filename = Prompt.ask("Enter filename (without extension)", default=default_filename)
+        
+        # Save the content
+        try:
+            saved_path = self.client.save_to_file(data, save_dir, filename, format_type)
+            self.console.print(f"[bold green]Results saved to:[/bold green] {saved_path}")
+            return True
+        except Exception as e:
+            self.console.print(f"[bold red]Error saving file:[/bold red] {str(e)}")
+            return False
     
     def run(self):
         """Run the application."""
@@ -645,22 +662,37 @@ You are currently using a self-hosted instance of Firecrawl. This means that all
             self.display_welcome()
             self.display_menu()
             
-            choice = Prompt.ask("Choose an option", choices=["1", "2", "3", "4", "5", "q"], default="1")
-            
-            if choice == "1":
-                self.scrape_url()
-            elif choice == "2":
-                self.crawl_url()
-            elif choice == "3":
-                self.map_url()
-            elif choice == "4":
-                self.settings()
-            elif choice == "5":
-                self.help()
-            elif choice.lower() == "q":
+            try:
+                choice = Prompt.ask("Choose an option", choices=["1", "2", "3", "4", "5", "q"], default="1")
+                
+                if choice == "1":
+                    self.scrape_url()
+                elif choice == "2":
+                    self.crawl_url()
+                elif choice == "3":
+                    self.map_url()
+                elif choice == "4":
+                    self.settings()
+                elif choice == "5":
+                    self.help()
+                elif choice.lower() == "q":
+                    self.running = False
+                    self.console.print("[bold green]Thank you for using Firecrawl Explorer![/bold green]")
+                    break
+            except KeyboardInterrupt:
+                # Handle Ctrl+C gracefully
                 self.running = False
-                self.console.print("[bold green]Thank you for using Firecrawl Explorer![/bold green]")
+                self.console.print("\n[bold yellow]Exiting Firecrawl Explorer...[/bold yellow]")
                 break
+            except Exception as e:
+                # Handle any other unexpected errors
+                self.console.print(f"\n[bold red]An error occurred:[/bold red] {str(e)}")
+                self.console.print("[bold cyan]Press Enter to continue...[/bold cyan]")
+                try:
+                    input()
+                except (EOFError, KeyboardInterrupt):
+                    self.running = False
+                    break
 
 
 def main():
