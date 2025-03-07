@@ -1,7 +1,7 @@
 # Firecrawl Explorer
 
 ![Firecrawl Explorer](https://img.shields.io/badge/Firecrawl-Explorer-orange)
-![Python](https://img.shields.io/badge/Python-3.6+-blue)
+![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 A simple terminal UI for interacting with a self-hosted Firecrawl instance. This application provides a user-friendly interface to explore and utilize the various functionalities of a local Firecrawl instance, including web scraping, crawling, and data extraction.
