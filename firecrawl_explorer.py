@@ -622,24 +622,18 @@ You are currently using a self-hosted instance of Firecrawl. This means that all
         # Ask for directory
         save_dir_options = [
             "1. Current directory (where the script is located)",
-            "2. Custom directory",
-            "3. Create new directory"
+            "2. Custom directory"
         ]
         
         for option in save_dir_options:
             self.console.print(f"  {option}")
         
-        dir_choice = Prompt.ask("Choose save location", choices=["1", "2", "3"], default="1")
+        dir_choice = Prompt.ask("Choose save location", choices=["1", "2"], default="1")
         
         if dir_choice == "1":
             save_dir = self.default_save_dir
-        elif dir_choice == "2":
+        else:
             save_dir = Prompt.ask("Enter directory path", default=self.default_save_dir)
-        else:  # Create new directory
-            parent_dir = Prompt.ask("Enter parent directory path", default=self.default_save_dir)
-            new_dir_name = Prompt.ask("Enter new directory name")
-            save_dir = os.path.join(parent_dir, new_dir_name)
-            self.console.print(f"[bold blue]Will create directory:[/bold blue] {save_dir}")
         
         # Generate default filename based on URL and timestamp
         domain = url.replace("https://", "").replace("http://", "").split("/")[0]
